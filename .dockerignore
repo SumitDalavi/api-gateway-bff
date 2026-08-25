@@ -1,0 +1,26 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+README.md
+
+# Node
+node_modules
+npm-debug.log
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv
+env
+
+# Env files
+.env
+.env.*
+
+# OS/IDE
+.DS_Store
+.vscode
+.idea
