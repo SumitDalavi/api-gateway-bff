@@ -25,4 +25,7 @@ app.get('/dashboard', async (req, res) => {
     await redis.set(cacheKey, JSON.stringify(payload), 'EX', 60);
     res.json(payload);
 });
-app.listen(3000);
+if (require.main === module) {
+    app.listen(3000, () => console.log('BFF listening on port 3000'));
+}
+module.exports = app;
