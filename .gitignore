@@ -30,3 +30,5 @@ bin/
 .env
 .env.local
 .env.*.local
+
+.nyc_output/
