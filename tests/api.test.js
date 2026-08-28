@@ -1,52 +1,85 @@
 const request = require('supertest');
-const axios = require('axios');
-const MockAdapter = require('axios-mock-adapter');
-const Redis = require('ioredis-mock');
-const mockRedis = new Redis();
-
-// We need to inject the mock redis into the app before requiring it if it's instantiated globally
-jest.mock('ioredis', () => require('ioredis-mock'));
-
-const app = require('../index');
+const { app, cache, userBreaker, orderBreaker, adBreaker } = require('../index');
 
 describe('API Gateway BFF', () => {
-    let mockAxios;
+    let token;
 
-    beforeAll(() => {
-        mockAxios = new MockAdapter(axios);
+    beforeAll(async () => {
+        const res = await request(app).post('/auth/login').send({ userId: 'u1' });
+        token = res.body.token;
     });
 
-    afterEach(async () => {
-        mockAxios.reset();
-        await mockRedis.flushall();
+    beforeEach(() => {
+        cache.clear();
+        userBreaker.state = 'CLOSED';
+        userBreaker.failures = 0;
+        orderBreaker.state = 'CLOSED';
+        orderBreaker.failures = 0;
+        adBreaker.state = 'CLOSED';
+        adBreaker.failures = 0;
     });
 
-    afterAll(() => {
-        mockAxios.restore();
+    it('should reject unauthenticated requests', async () => {
+        const res = await request(app).get('/dashboard');
+        expect(res.statusCode).toBe(401);
     });
 
-    it('should fetch from microservices and return aggregated payload', async () => {
-        mockAxios.onGet('http://user-service/users/123').reply(200, { id: '123', name: 'John Doe' });
-        mockAxios.onGet('http://order-service/orders/123').reply(200, [{ orderId: 'abc' }]);
-        mockAxios.onGet('http://ad-service/recommendations').reply(200, ['ad1', 'ad2']);
+    it('should aggregate data successfully and fallback ads', async () => {
+        const res = await request(app)
+            .get('/dashboard')
+            .set('Authorization', `Bearer ${token}`);
 
-        const res = await request(app).get('/dashboard?userId=123');
+        expect(res.statusCode).toBe(200);
+        expect(res.body.source).toBe('live');
+        expect(res.body.user.name).toBe('Alice');
+        expect(res.body.orders.length).toBe(2);
+        // Ads should fail-open and return fallback
+        expect(res.body.ads[0].id).toBe('fallback');
+    });
+
+    it('should cache successful responses', async () => {
+        await request(app).get('/dashboard').set('Authorization', `Bearer ${token}`);
         
-        expect(res.statusCode).toEqual(200);
-        expect(res.body.user.name).toEqual('John Doe');
-        expect(res.body.orders.length).toEqual(1);
-        expect(res.body.ads.length).toEqual(2);
+        // Second request should hit cache
+        const res = await request(app).get('/dashboard').set('Authorization', `Bearer ${token}`);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.source).toBe('cache');
     });
 
-    it('should fail-open on ad-service timeout', async () => {
-        mockAxios.onGet('http://user-service/users/123').reply(200, { id: '123', name: 'John Doe' });
-        mockAxios.onGet('http://order-service/orders/123').reply(200, [{ orderId: 'abc' }]);
-        mockAxios.onGet('http://ad-service/recommendations').timeout();
+    it('should fail entirely if critical user service fails', async () => {
+        const token2Res = await request(app).post('/auth/login').send({ userId: 'fail-user' });
+        const token2 = token2Res.body.token;
 
-        const res = await request(app).get('/dashboard?userId=123');
+        const res = await request(app)
+            .get('/dashboard')
+            .set('Authorization', `Bearer ${token2}`);
+
+        expect(res.statusCode).toBe(503);
+        expect(res.body.error).toBe('Critical service unavailable');
+    });
+
+    it('should fail-open and return empty orders if order service fails', async () => {
+        const token3Res = await request(app).post('/auth/login').send({ userId: 'fail-order' });
+        const token3 = token3Res.body.token;
+
+        const res = await request(app)
+            .get('/dashboard')
+            .set('Authorization', `Bearer ${token3}`);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.user.name).toBe('Alice');
+        // Fail-open means orders is an empty array instead of crashing
+        expect(res.body.orders).toEqual([]); 
+    });
+
+    it('should open circuit breaker after threshold failures', async () => {
+        // Ads fail threshold is 2
+        await request(app).get('/dashboard').set('Authorization', `Bearer ${token}`);
+        cache.clear(); // Clear cache so the next request actually hits the breaker
+        await request(app).get('/dashboard').set('Authorization', `Bearer ${token}`);
         
-        expect(res.statusCode).toEqual(200);
-        expect(res.body.user.name).toEqual('John Doe');
-        expect(res.body.ads).toEqual([]); // Fallback
+        // By now adBreaker should have failed 2 times, meaning it is OPEN
+        const healthRes = await request(app).get('/health');
+        expect(healthRes.body.adCircuit).toBe('OPEN');
     });
 });

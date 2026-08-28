@@ -13,7 +13,7 @@ Gateway->>client: Aggregated JSON
 ```
 
 ## Component Breakdown
-- **Core Technology**: Node.js, Redis
+- **Core Technology**: Node.js, In-Memory LRU Cache / Node.js Maps
 - **Design Paradigm**: Emphasizes high availability, fault tolerance, and security.
 
 ## Security & Scaling Considerations
