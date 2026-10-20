@@ -1,6 +1,6 @@
 {
   "name": "api-gateway-bff",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "API Gateway and BFF",
   "main": "index.js",
   "scripts": {
