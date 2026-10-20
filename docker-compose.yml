@@ -1,15 +1,24 @@
 version: '3.8'
+
 services:
   bff:
     build: .
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-  
+      - PORT=3000
+
+  # ── Tier 2 Companion Services (started via: docker compose --profile live up) ──
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
+    profiles: ["live"]
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  redisdata:
