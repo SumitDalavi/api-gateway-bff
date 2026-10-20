@@ -81,5 +81,18 @@ describe('API Gateway BFF', () => {
         // By now adBreaker should have failed 2 times, meaning it is OPEN
         const healthRes = await request(app).get('/health');
         expect(healthRes.body.adCircuit).toBe('OPEN');
+        expect(healthRes.body.mode).toBeDefined();
+        expect(healthRes.body.mode.cache).toBe('mock');
+    });
+
+    it('should report mock mode on /health and support cache operations', async () => {
+        const res = await request(app).get('/health');
+        expect(res.statusCode).toBe(200);
+        expect(res.body.mode.cache).toBe('mock');
+
+        await cache.set('custom:key', { foo: 'bar' }, 1000);
+        expect(await cache.get('custom:key')).toEqual({ foo: 'bar' });
+        await cache.del('custom:key');
+        expect(await cache.get('custom:key')).toBeNull();
     });
 });

@@ -1,25 +1,16 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const config = require('./lib/config-loader');
+const { createCache } = require('./lib/cache-factory');
 
 const app = express();
 app.use(express.json());
 
-const JWT_SECRET = 'bff-super-secret';
+const JWT_SECRET = config.JWT_SECRET;
 
-// --- Local Memory Cache ---
-const cache = new Map();
-function getCache(key) {
-    const item = cache.get(key);
-    if (!item) return null;
-    if (Date.now() > item.expiry) {
-        cache.delete(key);
-        return null;
-    }
-    return item.value;
-}
-function setCache(key, value, ttlMs) {
-    cache.set(key, { value, expiry: Date.now() + ttlMs });
-}
+// --- PCL Cache (Auto-promotes to Redis if REDIS_URL set, defaults to in-process Map) ---
+const cache = createCache();
+
 
 // --- Circuit Breaker ---
 class CircuitBreaker {
@@ -105,7 +96,7 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
 
     // 1. Caching layer
     const cacheKey = `dashboard:${userId}`;
-    const cached = getCache(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) {
         return res.json({ ...cached, source: 'cache' });
     }
@@ -130,7 +121,7 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
     };
 
     // 4. Update Cache
-    setCache(cacheKey, payload, 5000); // 5 sec TTL
+    await cache.set(cacheKey, payload, 5000); // 5 sec TTL
 
     res.json({ ...payload, source: 'live' });
 });
@@ -139,7 +130,11 @@ app.get('/health', (req, res) => {
     res.json({
         userCircuit: userBreaker.state,
         orderCircuit: orderBreaker.state,
-        adCircuit: adBreaker.state
+        adCircuit: adBreaker.state,
+        mode: {
+            cache: cache._mode || 'mock',
+            configHotReload: !!process.env.CONFIG_MOUNT_PATH
+        }
     });
 });
 

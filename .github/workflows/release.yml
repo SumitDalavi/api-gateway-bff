@@ -43,6 +43,24 @@ jobs:
           exit-code: "0"
           severity: CRITICAL,HIGH
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Container Image to GHCR
+        run: |
+          docker push "${{ env.IMAGE }}"
+          if [[ "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            REPO="${{ github.event.repository.name }}"
+            LATEST="ghcr.io/${OWNER}/${REPO}:latest"
+            docker tag "${{ env.IMAGE }}" "$LATEST"
+            docker push "$LATEST"
+          fi
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
