@@ -44,10 +44,10 @@ git checkout master
 git pull origin master
 
 # 2. Tag the release
-git tag -a v0.1.0 -m "Release v0.1.0"
+git tag -a v0.2.0 -m "Release v0.2.0"
 
 # 3. Push the tag to trigger the pipeline
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
 ### Release Pipeline Stages
@@ -76,3 +76,35 @@ cat sbom.spdx.json | jq .spdxVersion
 | `Unable to resolve action ... unable to find version` | Pinned action tag missing or upstream tag modified | Pin action to a verified release tag (`@v0.36.0`) or commit SHA |
 | `invalid reference format: repository name must be lowercase` | Container repository owner contains uppercase characters | Lowercase the repository owner before tagging (`tr '[:upper:]' '[:lower:]'`) |
 | `File not found: sbom.spdx.json` during release step | SBOM action configured with `artifact-name` instead of `output-file` | Ensure `output-file: sbom.spdx.json` is set in Anchore action |
+
+## Operations & Diagnostics Guide (v0.2.0)
+
+### Mode Verification & Diagnostics
+Inspect the active execution mode and backing provider status via the health endpoint:
+```bash
+# Check runtime mode and adapter status
+curl -s http://localhost:8080/health | jq .
+# Expected output when running without keys:
+# {"status": "ok", "mode": {"database": "mock", "ai": "mock", "cache": "mock"}}
+```
+
+### Running in Mock Mode (Tier 1)
+Start the service with zero external dependencies:
+```bash
+cp .env.example .env
+# Start service without modifying .env
+npm start || python main.py || go run .
+```
+
+### Running with Live Credentials (Tier 2 / 3)
+Populate target credentials in `.env` and restart:
+```bash
+# Verify live upgrade via health check
+curl -s http://localhost:8080/health | jq .mode
+```
+
+### Pulling Pre-Built OCI Image
+```bash
+docker pull ghcr.io/sumitdalavi/api-gateway-bff:v0.2.0
+docker run -d -p 8080:8080 --env-file .env ghcr.io/sumitdalavi/api-gateway-bff:v0.2.0
+```
