@@ -11,14 +11,10 @@
 > Backend-For-Frontend (BFF) gateway aggregating multiple microservices and providing GraphQL-like data fetching.
 
 ## The Problem
-## Problem Statement
-Frontend applications often suffer from over-fetching or multiple disparate API calls, leading to slow rendering times and high network overhead.
+Frontend and mobile applications frequently suffer from over-fetching or issuing multiple waterfall API calls across backend microservices, causing high latency, battery drain, and poor UX.
 
 ## Architecture & Solution
-A BFF aggregator that sits between the client and downstream services. It implements robust resilience patterns including circuit breakers, fail-open logic for partial outages, and an embedded LRU cache. Simple CRUD applications fail when subjected to high throughput, race conditions, or massive data sets.
-
-## The Solution
-This project implements a robust microservice architecture designed to handle these specific edge cases. By utilizing advanced paradigms like idempotency keys, advisory locks, or optimized caching layers, this service guarantees data integrity under load.
+This Backend-For-Frontend (BFF) gateway acts as an aggregation and mediation layer between clients and microservices. It implements circuit breakers, fail-open logic for graceful degradation, response caching, and tailored payload transformation.
 
 ```text
 ┌──────────────┐      ┌───────────────┐      ┌───────────────┐
